@@ -1,4 +1,5 @@
 import express from 'express';
+import QRCode from 'qrcode';
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
@@ -13,7 +14,7 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'Derby Hurricanes Wallet Service',
-    version: '4.1.0',
+    version: '5.0.1',
     appleConfigured: Boolean(applePassBaseUrl),
     googleConfigured: Boolean(googleSaveBaseUrl),
   });
@@ -37,7 +38,14 @@ app.get('/wallet', async (req, res) => {
     if (!response.ok || data.ok === false || !data.member) {
       throw new Error(data.error || 'Member card could not be loaded.');
     }
-    res.send(renderWallet(data.member, token));
+    const qrData = String(data.member.qrData || data.member.localMemberID || '');
+    const qrImage = await QRCode.toDataURL(qrData, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 420,
+      color: { dark: '#001f29', light: '#ffffff' },
+    });
+    res.send(renderWallet(data.member, token, qrImage));
   } catch (error) {
     res.status(400).send(renderError(error instanceof Error ? error.message : String(error)));
   }
@@ -68,7 +76,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function renderWallet(member, token) {
+function renderWallet(member, token, qrImage) {
   const status = escapeHtml(member.membershipStatus || 'Unknown');
   const statusClass = status.toLowerCase().replaceAll(' ', '-');
   const appleButton = applePassBaseUrl
@@ -83,30 +91,54 @@ function renderWallet(member, token) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#004957">
   <title>Derby Hurricanes Membership Card</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="page">
-    <section class="card">
+    <section class="card ${statusClass}">
+      <div class="season-ribbon">${escapeHtml(member.membershipSeason)}</div>
+      <div class="hologram" aria-hidden="true"></div>
       <img class="logo" src="/club-logo.png" alt="Derby Hurricanes">
       <p class="eyebrow">DERBY HURRICANES</p>
       <h1>${escapeHtml(member.name)}</h1>
       <p class="membership">${escapeHtml(member.membershipType)}</p>
+      <div class="status-pill ${statusClass}">${status}</div>
       <div class="details">
         <div><span>Member ID</span><strong>${escapeHtml(member.localMemberID)}</strong></div>
         <div><span>Season</span><strong>${escapeHtml(member.membershipSeason)}</strong></div>
         <div><span>Valid until</span><strong>${escapeHtml(member.expiryDate || 'Not set')}</strong></div>
-        <div><span>Status</span><strong class="status ${statusClass}">${status}</strong></div>
+        <div><span>Club</span><strong>Derby Hurricanes</strong></div>
       </div>
-      <div class="qr-value">QR DATA: ${escapeHtml(member.qrData)}</div>
+      <div class="qr-panel">
+        <img class="qr-image" src="${qrImage}" alt="Membership QR code">
+        <div>
+          <span>Scan at training and club events</span>
+          <strong>${escapeHtml(member.localMemberID)}</strong>
+        </div>
+      </div>
+      <p class="issued">Issued by Derby Hurricanes Lacrosse Club</p>
     </section>
     <section class="actions">
       ${appleButton}
       ${googleButton}
-      <p>This secure link expires after 30 days. The membership card remains managed by Derby Hurricanes club administrators.</p>
+      <button class="wallet-button secondary" onclick="shareCard()">Share membership card</button>
+      <button class="wallet-button secondary" onclick="window.print()">Print or save as PDF</button>
+      <p>This secure link expires after 30 days. Membership status is managed by Derby Hurricanes club administrators.</p>
     </section>
   </main>
+  <script>
+    async function shareCard() {
+      const shareData = { title: 'Derby Hurricanes Membership Card', text: '${escapeHtml(member.name)} membership card', url: window.location.href };
+      if (navigator.share) {
+        try { await navigator.share(shareData); } catch (_) {}
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        alert('Membership card link copied.');
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
