@@ -1,6 +1,6 @@
 {
   "name": "derby-hurricanes-wallet-service",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
     "qrcode": "^1.5.4"
   }
 }
