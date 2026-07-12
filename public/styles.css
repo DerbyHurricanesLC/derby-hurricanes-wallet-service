@@ -1,0 +1,25 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #0b5361, #071827 45%, #03080d); color: white; }
+.page { width: min(92vw, 520px); margin: 0 auto; padding: 28px 0 48px; }
+.card { background: linear-gradient(145deg, #0aa7a5, #004957 60%, #071827); border: 1px solid rgba(255,255,255,.22); border-radius: 28px; padding: 28px; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+.logo { display: block; width: 145px; max-height: 120px; object-fit: contain; margin: 0 auto 16px; }
+.eyebrow { margin: 0; text-align: center; letter-spacing: .18em; font-weight: 900; font-size: .78rem; }
+h1 { margin: 9px 0 4px; text-align: center; font-size: 2rem; }
+.membership { margin: 0 0 22px; text-align: center; color: #d9fffb; font-weight: 800; }
+.details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.details div { padding: 13px; background: rgba(3, 15, 22, .42); border-radius: 15px; }
+.details span { display: block; color: rgba(255,255,255,.66); font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; }
+.details strong { display: block; margin-top: 4px; }
+.status.active { color: #58e0a6; }
+.status.due-soon { color: #ffc86a; }
+.status.expired { color: #ff8a8a; }
+.qr-value { margin-top: 18px; padding: 12px; text-align: center; border: 1px dashed rgba(255,255,255,.4); border-radius: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.actions { display: grid; gap: 12px; margin-top: 18px; }
+.wallet-button { display: block; width: 100%; padding: 16px 18px; border: 0; border-radius: 15px; font-size: 1rem; font-weight: 900; text-align: center; text-decoration: none; cursor: pointer; }
+.wallet-button.apple { background: #000; color: #fff; }
+.wallet-button.google { background: #fff; color: #111; }
+.wallet-button:disabled { opacity: .42; cursor: not-allowed; }
+.actions p { color: rgba(255,255,255,.62); text-align: center; line-height: 1.5; font-size: .86rem; }
+.error { background: #251119; border-color: #7d3442; }
+@media (max-width: 420px) { .details { grid-template-columns: 1fr; } .card { padding: 22px; } }
