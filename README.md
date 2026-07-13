@@ -1,25 +1,12 @@
-# Derby Hurricanes Wallet Service 7.0
+# Derby Hurricanes Wallet Service 8.0
 
-Complete member-card and portal release.
+This release uses permanent member URLs in the form `/card/:token`.
+This fixes iPhone Home Screen launch failures caused by Safari and installed web apps not reliably sharing local storage.
 
-## Includes
-- Google Wallet creation and automatic updates
-- Automatic season/status rollover
-- Member-specific Home Screen installation fix
-- Offline fallback for previously loaded cards
-- Exact club logo on dark background
-- Larger hosted QR code
-- Member portal tabs for overview, attendance, payments and club information
-- Optional announcements, fixtures, payment history and attendance history when returned by Apps Script
+## Deployment
 
-## Deploy
-```bash
-npm install
-npm run check
-git add .
-git commit -m "Upgrade wallet service to version 7"
-git pull --rebase origin main
-git push origin main
-```
-
-After deployment, delete old Home Screen shortcuts and install again from each member's secure card URL.
+1. Copy these files into the existing Git-connected wallet service folder.
+2. Run `npm install` and `node --check server.js`.
+3. Commit and push to GitHub.
+4. Wait for Render to redeploy.
+5. Remove old iPhone Home Screen icons and reinstall from the new `/card/:token` page.

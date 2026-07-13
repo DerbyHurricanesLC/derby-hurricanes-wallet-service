@@ -23,8 +23,8 @@ const googleConfigured = Boolean(
   googlePrivateKey,
 );
 
-const VERSION = '7.0.0';
-const OBJECT_VERSION = 'v70';
+const VERSION = '8.0.0';
+const OBJECT_VERSION = 'v80';
 
 app.disable('x-powered-by');
 app.use(express.static('public', { maxAge: '1h', index: false }));
@@ -32,30 +32,60 @@ app.use(express.json({ limit: '100kb' }));
 
 app.get('/', (_req, res) => {
   res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#001f29"><title>DH Card</title><link rel="stylesheet" href="/styles.css?v=70"></head>
-<body><main class="page"><section class="error-card"><div class="error-logo-panel"><img class="error-logo" src="/club-logo-full.png?v=70" alt="Derby Hurricanes"></div><h1 id="launch-title">Opening membership card…</h1><p id="launch-message">Please wait.</p></section></main>
-<script>try{const saved=localStorage.getItem('derbyHurricanesWalletUrl');if(saved&&saved.includes('/wallet?token=')){location.replace(saved);}else{document.getElementById('launch-title').textContent='Card unavailable';document.getElementById('launch-message').textContent='Open your secure Derby Hurricanes card link, then install the card again.';}}catch(_){document.getElementById('launch-title').textContent='Card unavailable';document.getElementById('launch-message').textContent='Open the secure membership-card link supplied by Derby Hurricanes.';}</script></body></html>`);
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#001f29">
+  <title>Derby Hurricanes Membership Card</title>
+  <link rel="stylesheet" href="/styles.css?v=80">
+</head>
+<body>
+  <main class="page">
+    <section class="error-card">
+      <div class="error-logo-panel">
+        <img class="error-logo" src="/club-logo-full.png?v=80" alt="Derby Hurricanes">
+      </div>
+      <h1>Derby Hurricanes Membership Card</h1>
+      <p>Open the secure member-card link supplied by Derby Hurricanes.</p>
+    </section>
+  </main>
+</body>
+</html>`);
 });
 
+app.get('/card/:token/manifest.webmanifest', (req, res) => {
+  const token = String(req.params.token || '').trim();
+  const cardPath = `/card/${encodeURIComponent(token)}`;
+
+  res
+    .set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    .type('application/manifest+json')
+    .send({
+      id: cardPath,
+      name: 'Derby Hurricanes Membership Card',
+      short_name: 'DH Card',
+      description: 'Derby Hurricanes digital membership card',
+      start_url: cardPath,
+      scope: '/',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#00141d',
+      theme_color: '#001f29',
+      icons: [
+        { src: '/wallet-logo-192.png?v=80', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/wallet-logo-512.png?v=80', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      ],
+    });
+});
+
+// Legacy manifest URL retained for old links, but new installs use /card/:token.
 app.get('/manifest.webmanifest', (req, res) => {
   const token = String(req.query.token || '').trim();
-  const startUrl = token ? `/wallet?token=${encodeURIComponent(token)}` : '/';
-  res.set('Cache-Control', 'no-store').type('application/manifest+json').send({
-    id: startUrl,
-    name: 'Derby Hurricanes Membership Card',
-    short_name: 'DH Card',
-    description: 'Derby Hurricanes digital membership card',
-    start_url: startUrl,
-    scope: '/',
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#00141d',
-    theme_color: '#001f29',
-    icons: [
-      { src: '/wallet-logo-192.png?v=70', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/wallet-logo-512.png?v=70', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-    ],
-  });
+  if (token) {
+    return res.redirect(302, `/card/${encodeURIComponent(token)}/manifest.webmanifest`);
+  }
+  return res.status(400).json({ error: 'Missing member token.' });
 });
 
 app.get('/health', (_req, res) => {
@@ -68,6 +98,8 @@ app.get('/health', (_req, res) => {
     iphoneHomeScreen: true,
     androidHomeScreen: true,
     homeScreenTokenFix: true,
+    permanentMemberCardUrl: true,
+    iphoneDirectLaunch: true,
     brandedWalletCards: true,
     automaticSeasonRollover: true,
     permanentGoogleWalletObject: true,
@@ -75,8 +107,8 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.get('/wallet', async (req, res) => {
-  const token = String(req.query.token || '').trim();
+app.get('/card/:token', async (req, res) => {
+  const token = String(req.params.token || '').trim();
   if (!token) return res.status(400).send(renderError('Missing wallet token.'));
 
   try {
@@ -105,6 +137,35 @@ app.get('/wallet', async (req, res) => {
   }
 });
 
+app.get('/wallet', (req, res) => {
+  const token = String(req.query.token || '').trim();
+  if (!token) return res.status(400).send(renderError('Missing wallet token.'));
+  return res.redirect(302, `/card/${encodeURIComponent(token)}`);
+});
+
+app.get('/google/:token', async (req, res) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.status(400).send(renderError('Missing wallet token.'));
+  if (!googleConfigured) {
+    return res.status(503).send(renderError(
+      'Google Wallet has not been configured by the club yet.',
+    ));
+  }
+
+  try {
+    const rawMember = await loadMember(token);
+    const member = normaliseMembership(rawMember);
+    const walletObject = await upsertGoogleObject(member, token);
+    return res.redirect(createGoogleSaveUrl(walletObject));
+  } catch (error) {
+    console.error('Google Wallet add failed:', error);
+    return res.status(400).send(renderError(
+      error instanceof Error ? error.message : String(error),
+    ));
+  }
+});
+
+// Legacy Google Wallet URL retained for previously issued links.
 app.get('/wallet/google', async (req, res) => {
   const token = String(req.query.token || '').trim();
   if (!token) return res.status(400).send(renderError('Missing wallet token.'));
@@ -234,7 +295,7 @@ function buildGoogleObject(member, token) {
     ? googleClassId
     : `${googleIssuerId}.${googleClassId}`;
   const expiry = parseUkDate(member.expiryDate);
-  const fullCardUrl = `${publicBaseUrl}/wallet?token=${encodeURIComponent(token)}`;
+  const fullCardUrl = `${publicBaseUrl}/card/${encodeURIComponent(token)}`;
 
   const genericObject = {
     id: objectId,
@@ -254,7 +315,7 @@ function buildGoogleObject(member, token) {
     },
     hexBackgroundColor: statusColour(status),
     logo: {
-      sourceUri: { uri: `${publicBaseUrl}/wallet-logo.png?v=70` },
+      sourceUri: { uri: `${publicBaseUrl}/wallet-logo.png?v=80` },
       contentDescription: {
         defaultValue: {
           language: 'en-GB',
@@ -263,7 +324,7 @@ function buildGoogleObject(member, token) {
       },
     },
     heroImage: {
-      sourceUri: { uri: `${publicBaseUrl}/wallet-hero.jpg?v=70` },
+      sourceUri: { uri: `${publicBaseUrl}/wallet-hero.jpg?v=80` },
       contentDescription: {
         defaultValue: {
           language: 'en-GB',
@@ -460,7 +521,7 @@ function renderWallet(member, token, qrImage) {
   const expiryDate = escapeHtml(member.expiryDate || 'Not set');
 
   const googleButton = googleConfigured
-    ? `<a class="wallet-button google" href="/wallet/google?token=${encodeURIComponent(token)}"><span class="google-mark">G</span><span>Add to Google Wallet</span></a>`
+    ? `<a class="wallet-button google" href="/google/${encodeURIComponent(token)}"><span class="google-mark">G</span><span>Add to Google Wallet</span></a>`
     : '<button class="wallet-button google" disabled>Google Wallet setup pending</button>';
 
   return `<!doctype html>
@@ -472,10 +533,10 @@ function renderWallet(member, token, qrImage) {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DH Card">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=70">
-  <link rel="manifest" href="/manifest.webmanifest?token=${encodeURIComponent(token)}&v=70">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=80">
+  <link rel="manifest" href="/card/${encodeURIComponent(token)}/manifest.webmanifest?v=80">
   <title>${memberName} — Derby Hurricanes</title>
-  <link rel="stylesheet" href="/styles.css?v=70">
+  <link rel="stylesheet" href="/styles.css?v=80">
 </head>
 <body>
   <main class="page">
@@ -485,7 +546,7 @@ function renderWallet(member, token, qrImage) {
 
       <header class="card-header">
         <div class="logo-panel">
-          <img class="club-logo" src="/club-logo-full.png?v=70" alt="Derby Hurricanes Lacrosse Club">
+          <img class="club-logo" src="/club-logo-full.png?v=80" alt="Derby Hurricanes Lacrosse Club">
         </div>
         <div class="season-block">
           <span>MEMBERSHIP</span>
@@ -558,7 +619,7 @@ function renderWallet(member, token, qrImage) {
     const ua = navigator.userAgent || '';
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
     let deferredInstallPrompt = null;
-    try { localStorage.setItem('derbyHurricanesWalletUrl', window.location.href); } catch (_) {}
+    try { localStorage.setItem('derbyHurricanesCardUrl', window.location.href); } catch (_) {}
     window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); deferredInstallPrompt = event; });
     window.addEventListener('appinstalled', () => { const button = document.getElementById('home-screen-install'); if (button) { button.textContent = 'DH Card Installed'; button.disabled = true; } });
     function showIphoneHelp() { document.getElementById('iphone-modal').classList.add('open'); }
@@ -594,7 +655,7 @@ function renderWallet(member, token, qrImage) {
         message.textContent = error.message || 'Wallet refresh failed.';
       }
     }
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=70').catch(() => {});
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=80').catch(() => {});
   </script>
 </body>
 </html>`;
@@ -606,14 +667,14 @@ function renderError(message) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/styles.css?v=70">
+  <link rel="stylesheet" href="/styles.css?v=80">
   <title>Derby Hurricanes Membership Card</title>
 </head>
 <body>
   <main class="page">
     <section class="error-card">
       <div class="error-logo-panel">
-        <img class="error-logo" src="/club-logo-full.png?v=70" alt="Derby Hurricanes">
+        <img class="error-logo" src="/club-logo-full.png?v=80" alt="Derby Hurricanes">
       </div>
       <h1>Card unavailable</h1>
       <p>${escapeHtml(message)}</p>
