@@ -1,11 +1,18 @@
-# Derby Hurricanes Wallet Service 6.0
+# Derby Hurricanes Wallet Service 6.1
 
-Complete replacement wallet service for:
+This release adds:
 
-- branded hosted membership cards;
-- Google Wallet generic passes;
-- iPhone Add to Home Screen;
-- secure member data fetched through Apps Script.
+- automatic membership-season calculation from the expiry date;
+- automatic Active, Due Soon and Expired status calculation;
+- one permanent Google Wallet object per member;
+- Google Wallet REST updates, so the same installed pass can change after renewal;
+- background pass refresh whenever the hosted card is opened;
+- manual **Refresh wallet pass** button;
+- exact Derby Hurricanes logo placed unchanged on a dark background.
+
+## Important first-time note
+
+Version 6.1 uses a permanent object ID ending in `-membership-v61`. Members who already installed an older versioned pass must remove it and add the 6.1 pass once. Future seasons then update the same 6.1 pass instead of issuing another card.
 
 ## Render environment variables
 
@@ -21,29 +28,13 @@ Optional:
 
 ## Deploy
 
-Copy these files into the existing GitHub-connected wallet repository, preserving its `.git` folder. Then run:
-
 ```bash
 npm install
 npm run check
 git add .
-git commit -m "Replace wallet service with version 6.0"
+git commit -m "Add automatic season rollover and permanent wallet updates"
 git pull --rebase origin main
 git push origin main
 ```
 
-Render should redeploy automatically.
-
-## Verify
-
-Open:
-
-`https://derby-hurricanes-wallet-service.onrender.com/health`
-
-Expected version: `6.0.0`.
-
-Remove the old test pass and add it again because v6 uses a new Google Wallet object ID ending in `-v60`.
-
-## Google Wallet limitation
-
-Google controls the native pass layout and the white expanded details screen. The hosted card is the full premium design; the Google Wallet pass is the compact native version.
+Verify `/health` reports version `6.1.0` and `automaticSeasonRollover: true`.

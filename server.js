@@ -23,6 +23,9 @@ const googleConfigured = Boolean(
   googlePrivateKey,
 );
 
+const VERSION = '6.1.0';
+const OBJECT_VERSION = 'v61';
+
 app.disable('x-powered-by');
 app.use(express.static('public', { maxAge: '1h' }));
 app.use(express.json({ limit: '100kb' }));
@@ -37,12 +40,14 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'Derby Hurricanes Wallet Service',
-    version: '6.0.0',
+    version: VERSION,
     appleConfigured: false,
     googleConfigured,
     iphoneHomeScreen: true,
     brandedWalletCards: true,
-    googleWalletObjectVersion: 'v60',
+    automaticSeasonRollover: true,
+    permanentGoogleWalletObject: true,
+    googleWalletObjectVersion: OBJECT_VERSION,
   });
 });
 
@@ -51,14 +56,23 @@ app.get('/wallet', async (req, res) => {
   if (!token) return res.status(400).send(renderError('Missing wallet token.'));
 
   try {
-    const member = await loadMember(token);
+    const rawMember = await loadMember(token);
+    const member = normaliseMembership(rawMember);
+
+    if (googleConfigured) {
+      upsertGoogleObject(member, token).catch((error) => {
+        console.error('Background Google Wallet sync failed:', error.message);
+      });
+    }
+
     const qrData = String(member.qrData || member.localMemberID || '');
     const qrImage = await QRCode.toDataURL(qrData, {
       errorCorrectionLevel: 'H',
       margin: 1,
-      width: 900,
+      width: 1000,
       color: { dark: '#001f29', light: '#ffffff' },
     });
+
     return res.send(renderWallet(member, token, qrImage));
   } catch (error) {
     return res.status(400).send(renderError(
@@ -77,12 +91,41 @@ app.get('/wallet/google', async (req, res) => {
   }
 
   try {
-    const member = await loadMember(token);
-    return res.redirect(createGoogleSaveUrl(member, token));
+    const rawMember = await loadMember(token);
+    const member = normaliseMembership(rawMember);
+    const walletObject = await upsertGoogleObject(member, token);
+    return res.redirect(createGoogleSaveUrl(walletObject));
   } catch (error) {
+    console.error('Google Wallet add failed:', error);
     return res.status(400).send(renderError(
       error instanceof Error ? error.message : String(error),
     ));
+  }
+});
+
+app.post('/wallet/sync', async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) return res.status(400).json({ ok: false, error: 'Missing wallet token.' });
+  if (!googleConfigured) {
+    return res.status(503).json({ ok: false, error: 'Google Wallet is not configured.' });
+  }
+
+  try {
+    const rawMember = await loadMember(token);
+    const member = normaliseMembership(rawMember);
+    const walletObject = await upsertGoogleObject(member, token);
+    return res.json({
+      ok: true,
+      objectId: walletObject.id,
+      season: member.membershipSeason,
+      status: member.membershipStatus,
+      expiryDate: member.expiryDate,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
@@ -112,7 +155,47 @@ async function loadMember(token) {
   return data.member;
 }
 
-function createGoogleSaveUrl(member, token) {
+function normaliseMembership(member) {
+  const expiry = parseUkDate(member.expiryDate);
+  const now = new Date();
+  const normalised = { ...member };
+
+  if (expiry) {
+    normalised.membershipSeason = seasonFromExpiry(expiry);
+    normalised.expiryDate = formatUkDate(expiry);
+
+    const expiryEnd = new Date(expiry);
+    expiryEnd.setUTCHours(23, 59, 59, 999);
+
+    if (now.getTime() > expiryEnd.getTime()) {
+      normalised.membershipStatus = 'Expired';
+    } else {
+      const daysLeft = Math.ceil((expiryEnd.getTime() - now.getTime()) / 86400000);
+      normalised.membershipStatus = daysLeft <= 30 ? 'Due Soon' : 'Active';
+    }
+  } else {
+    normalised.membershipSeason = String(
+      member.membershipSeason || currentMembershipSeason(now),
+    );
+    normalised.membershipStatus = String(member.membershipStatus || 'Unknown');
+  }
+
+  return normalised;
+}
+
+function currentMembershipSeason(date) {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const startYear = month >= 10 ? year : year - 1;
+  return `${startYear}/${String((startYear + 1) % 100).padStart(2, '0')}`;
+}
+
+function seasonFromExpiry(expiry) {
+  const endYear = expiry.getUTCFullYear();
+  return `${endYear - 1}/${String(endYear % 100).padStart(2, '0')}`;
+}
+
+function buildGoogleObject(member, token) {
   const localMemberId = String(member.localMemberID || 'member');
   const membershipSeason = String(member.membershipSeason || 'season');
   const membershipType = String(member.membershipType || 'Membership');
@@ -122,8 +205,7 @@ function createGoogleSaveUrl(member, token) {
   const qrValue = String(member.qrData || member.localMemberID || '');
 
   const localId = cleanId(localMemberId);
-  const season = cleanId(membershipSeason);
-  const objectId = `${googleIssuerId}.${localId}-${season}-v60`;
+  const objectId = `${googleIssuerId}.${localId}-membership-${OBJECT_VERSION}`;
   const classId = googleClassId.includes('.')
     ? googleClassId
     : `${googleIssuerId}.${googleClassId}`;
@@ -141,11 +223,14 @@ function createGoogleSaveUrl(member, token) {
       defaultValue: { language: 'en-GB', value: memberName },
     },
     subheader: {
-      defaultValue: { language: 'en-GB', value: `${membershipType} · ${membershipSeason}` },
+      defaultValue: {
+        language: 'en-GB',
+        value: `${membershipType} · ${membershipSeason}`,
+      },
     },
     hexBackgroundColor: statusColour(status),
     logo: {
-      sourceUri: { uri: `${publicBaseUrl}/wallet-logo.png?v=60` },
+      sourceUri: { uri: `${publicBaseUrl}/wallet-logo.png?v=61` },
       contentDescription: {
         defaultValue: {
           language: 'en-GB',
@@ -154,7 +239,7 @@ function createGoogleSaveUrl(member, token) {
       },
     },
     heroImage: {
-      sourceUri: { uri: `${publicBaseUrl}/wallet-hero.jpg?v=60` },
+      sourceUri: { uri: `${publicBaseUrl}/wallet-hero.jpg?v=61` },
       contentDescription: {
         defaultValue: {
           language: 'en-GB',
@@ -202,13 +287,93 @@ function createGoogleSaveUrl(member, token) {
     genericObject.validTimeInterval = { end: { date: expiry.toISOString() } };
   }
 
+  return genericObject;
+}
+
+async function upsertGoogleObject(member, token) {
+  const walletObject = buildGoogleObject(member, token);
+  const accessToken = await getGoogleAccessToken();
+  const encodedId = encodeURIComponent(walletObject.id);
+  const objectUrl = `https://walletobjects.googleapis.com/walletobjects/v1/genericObject/${encodedId}`;
+
+  const existingResponse = await fetch(objectUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  let response;
+  if (existingResponse.status === 404) {
+    response = await fetch(
+      'https://walletobjects.googleapis.com/walletobjects/v1/genericObject',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(walletObject),
+      },
+    );
+  } else if (existingResponse.ok) {
+    response = await fetch(objectUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(walletObject),
+    });
+  } else {
+    const text = await existingResponse.text();
+    throw new Error(`Google Wallet lookup failed (${existingResponse.status}): ${text}`);
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Google Wallet update failed (${response.status}): ${text}`);
+  }
+
+  return walletObject;
+}
+
+async function getGoogleAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = jwt.sign(
+    {
+      iss: googleServiceAccountEmail,
+      scope: 'https://www.googleapis.com/auth/wallet_object.issuer',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    },
+    googlePrivateKey,
+    { algorithm: 'RS256' },
+  );
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    throw new Error(data.error_description || data.error || 'Could not authenticate with Google Wallet.');
+  }
+
+  return data.access_token;
+}
+
+function createGoogleSaveUrl(walletObject) {
   const claims = {
     iss: googleServiceAccountEmail,
     aud: 'google',
     typ: 'savetowallet',
     iat: Math.floor(Date.now() / 1000),
     origins: [publicBaseUrl],
-    payload: { genericObjects: [genericObject] },
+    payload: { genericObjects: [walletObject] },
   };
 
   const signedJwt = jwt.sign(claims, googlePrivateKey, { algorithm: 'RS256' });
@@ -233,6 +398,14 @@ function parseUkDate(value) {
     59,
     59,
   ));
+}
+
+function formatUkDate(date) {
+  return [
+    String(date.getUTCDate()).padStart(2, '0'),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    date.getUTCFullYear(),
+  ].join('/');
 }
 
 function cleanId(value) {
@@ -271,14 +444,14 @@ function renderWallet(member, token, qrImage) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#003f49">
+  <meta name="theme-color" content="#001f29">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DH Card">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=61">
+  <link rel="manifest" href="/manifest.webmanifest?v=61">
   <title>${memberName} — Derby Hurricanes</title>
-  <link rel="stylesheet" href="/styles.css?v=60">
+  <link rel="stylesheet" href="/styles.css?v=61">
 </head>
 <body>
   <main class="page">
@@ -287,7 +460,9 @@ function renderWallet(member, token, qrImage) {
       <div class="card-sheen" aria-hidden="true"></div>
 
       <header class="card-header">
-        <img class="club-logo" src="/club-logo-full.png?v=60" alt="Derby Hurricanes Lacrosse Club">
+        <div class="logo-panel">
+          <img class="club-logo" src="/club-logo-full.png?v=61" alt="Derby Hurricanes Lacrosse Club">
+        </div>
         <div class="season-block">
           <span>MEMBERSHIP</span>
           <strong>${membershipSeason}</strong>
@@ -334,8 +509,9 @@ function renderWallet(member, token, qrImage) {
       <div id="android-actions">${googleButton}</div>
       <button id="iphone-install" class="wallet-button apple" onclick="showIphoneHelp()">Add to iPhone Home Screen</button>
       <button class="wallet-button secondary" onclick="shareCard()">Share membership card</button>
+      <button class="wallet-button secondary" onclick="syncWallet()">Refresh wallet pass</button>
       <button class="wallet-button secondary" onclick="window.print()">Print or save as PDF</button>
-      <p>Google Wallet uses Google’s own layout. This hosted card is the full premium Derby Hurricanes design.</p>
+      <p id="sync-message">Membership season, expiry and status are recalculated automatically from the club record.</p>
     </section>
   </main>
 
@@ -354,6 +530,7 @@ function renderWallet(member, token, qrImage) {
   </div>
 
   <script>
+    const walletToken = ${JSON.stringify(token)};
     const ua = navigator.userAgent || '';
     if (/iPhone|iPad|iPod/i.test(ua)) document.getElementById('android-actions').hidden = true;
     if (/Android/i.test(ua)) document.getElementById('iphone-install').hidden = true;
@@ -365,7 +542,23 @@ function renderWallet(member, token, qrImage) {
       try { await navigator.clipboard.writeText(window.location.href); alert('Membership card link copied.'); }
       catch (_) { alert('Copy the membership-card address from your browser.'); }
     }
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    async function syncWallet() {
+      const message = document.getElementById('sync-message');
+      message.textContent = 'Refreshing wallet pass…';
+      try {
+        const response = await fetch('/wallet/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: walletToken }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Refresh failed.');
+        message.textContent = 'Wallet pass refreshed: ' + data.season + ', ' + data.status + ', valid until ' + data.expiryDate + '.';
+      } catch (error) {
+        message.textContent = error.message || 'Wallet refresh failed.';
+      }
+    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js?v=61').catch(() => {});
   </script>
 </body>
 </html>`;
@@ -377,13 +570,15 @@ function renderError(message) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="/styles.css?v=60">
+  <link rel="stylesheet" href="/styles.css?v=61">
   <title>Derby Hurricanes Membership Card</title>
 </head>
 <body>
   <main class="page">
     <section class="error-card">
-      <img class="error-logo" src="/club-logo-full.png?v=60" alt="Derby Hurricanes">
+      <div class="error-logo-panel">
+        <img class="error-logo" src="/club-logo-full.png?v=61" alt="Derby Hurricanes">
+      </div>
       <h1>Card unavailable</h1>
       <p>${escapeHtml(message)}</p>
     </section>
@@ -393,5 +588,5 @@ function renderError(message) {
 }
 
 app.listen(port, () => {
-  console.log(`Wallet service listening on ${port}`);
+  console.log(`Wallet service ${VERSION} listening on ${port}`);
 });

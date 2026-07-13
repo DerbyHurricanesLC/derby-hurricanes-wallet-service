@@ -1,9 +1,10 @@
-const CACHE = 'dh-wallet-v6';
+const CACHE = 'dh-wallet-v61';
 const STATIC = [
-  '/styles.css',
-  '/club-logo-full.png',
-  '/wallet-logo.png',
-  '/wallet-hero.jpg'
+  '/styles.css?v=61',
+  '/club-logo-full.png?v=61',
+  '/wallet-logo.png?v=61',
+  '/wallet-hero.jpg?v=61',
+  '/apple-touch-icon.png?v=61'
 ];
 
 self.addEventListener('install', event => {
@@ -22,7 +23,5 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
-  );
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
