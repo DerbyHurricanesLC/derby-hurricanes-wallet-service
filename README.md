@@ -1,40 +1,25 @@
-# Derby Hurricanes Wallet Service 6.1
+# Derby Hurricanes Wallet Service 7.0
 
-This release adds:
+Complete member-card and portal release.
 
-- automatic membership-season calculation from the expiry date;
-- automatic Active, Due Soon and Expired status calculation;
-- one permanent Google Wallet object per member;
-- Google Wallet REST updates, so the same installed pass can change after renewal;
-- background pass refresh whenever the hosted card is opened;
-- manual **Refresh wallet pass** button;
-- exact Derby Hurricanes logo placed unchanged on a dark background.
-
-## Important first-time note
-
-Version 6.1 uses a permanent object ID ending in `-membership-v61`. Members who already installed an older versioned pass must remove it and add the 6.1 pass once. Future seasons then update the same 6.1 pass instead of issuing another card.
-
-## Render environment variables
-
-- `APPS_SCRIPT_URL`
-- `GOOGLE_WALLET_ISSUER_ID`
-- `GOOGLE_WALLET_CLASS_ID`
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-- `GOOGLE_PRIVATE_KEY`
-
-Optional:
-
-- `WALLET_ORIGIN`
+## Includes
+- Google Wallet creation and automatic updates
+- Automatic season/status rollover
+- Member-specific Home Screen installation fix
+- Offline fallback for previously loaded cards
+- Exact club logo on dark background
+- Larger hosted QR code
+- Member portal tabs for overview, attendance, payments and club information
+- Optional announcements, fixtures, payment history and attendance history when returned by Apps Script
 
 ## Deploy
-
 ```bash
 npm install
 npm run check
 git add .
-git commit -m "Add automatic season rollover and permanent wallet updates"
+git commit -m "Upgrade wallet service to version 7"
 git pull --rebase origin main
 git push origin main
 ```
 
-Verify `/health` reports version `6.1.0` and `automaticSeasonRollover: true`.
+After deployment, delete old Home Screen shortcuts and install again from each member's secure card URL.

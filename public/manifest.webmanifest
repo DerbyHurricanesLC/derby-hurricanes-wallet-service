@@ -4,11 +4,16 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#031017",
-  "theme_color": "#003f49",
+  "background_color": "#02090e",
+  "theme_color": "#001f29",
   "icons": [
     {
-      "src": "/wallet-logo.png",
+      "src": "/wallet-logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/wallet-logo-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

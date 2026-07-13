@@ -1,27 +1,5 @@
-const CACHE = 'dh-wallet-v61';
-const STATIC = [
-  '/styles.css?v=61',
-  '/club-logo-full.png?v=61',
-  '/wallet-logo.png?v=61',
-  '/wallet-hero.jpg?v=61',
-  '/apple-touch-icon.png?v=61'
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(STATIC)));
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE).map(key => caches.delete(key))
-    ))
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
-});
+const CACHE_NAME='derby-hurricanes-wallet-v7';
+const STATIC=['/styles.css?v=70','/club-logo-full.png?v=70','/wallet-logo-192.png?v=70','/wallet-logo-512.png?v=70','/apple-touch-icon.png?v=70'];
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(STATIC)));self.skipWaiting();});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
+self.addEventListener('fetch',event=>{const u=new URL(event.request.url);if(event.request.method!=='GET')return;if(u.pathname==='/wallet'){event.respondWith(fetch(event.request).then(r=>{const c=r.clone();caches.open(CACHE_NAME).then(cache=>cache.put(event.request,c));return r;}).catch(()=>caches.match(event.request)));return;}if(['/', '/wallet/google','/manifest.webmanifest','/health'].includes(u.pathname)){event.respondWith(fetch(event.request));return;}event.respondWith(caches.match(event.request).then(c=>c||fetch(event.request).then(r=>{const copy=r.clone();caches.open(CACHE_NAME).then(cache=>cache.put(event.request,copy));return r;})));});

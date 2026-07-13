@@ -42,7 +42,7 @@ body {
   right: -240px;
   bottom: -285px;
   opacity: .10;
-  background: url('/club-logo-full.png?v=60') center/contain no-repeat;
+  background: url('/club-logo-full.png?v=70') center/contain no-repeat;
   filter: grayscale(1) brightness(2.4);
   transform: rotate(-7deg);
 }
@@ -215,3 +215,12 @@ h1 { margin: 0; font-size: clamp(2.35rem, 7vw, 3.8rem); line-height: .98; letter
 @media (max-width: 390px) {
   .logo-panel { width: 88%; }
 }
+
+
+/* Version 7 member portal */
+#loading-screen{position:fixed;inset:0;z-index:100;display:grid;place-content:center;justify-items:center;gap:18px;background:#02090e;transition:opacity .35s ease,visibility .35s ease}#loading-screen.hidden{opacity:0;visibility:hidden}#loading-screen img{width:180px;max-height:180px;object-fit:contain;filter:drop-shadow(0 20px 30px rgba(0,0,0,.5));animation:pulse 1.4s ease-in-out infinite}#loading-screen span{color:rgba(255,255,255,.7);font-weight:800}@keyframes pulse{50%{transform:scale(1.04);opacity:.82}}
+.portal-tabs{position:sticky;top:0;z-index:10;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:16px 0;padding:6px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(2,14,20,.88);backdrop-filter:blur(18px)}.portal-tabs button{min-width:0;padding:12px 5px;border:0;border-radius:13px;color:rgba(255,255,255,.62);background:transparent;font:inherit;font-size:.8rem;font-weight:850;cursor:pointer}.portal-tabs button.active{color:#001b21;background:var(--teal)}
+.portal-panel{display:none;padding:20px;border:1px solid rgba(255,255,255,.12);border-radius:22px;background:rgba(4,24,31,.84);backdrop-filter:blur(14px)}.portal-panel.active{display:block;animation:panelIn .22s ease}@keyframes panelIn{from{opacity:0;transform:translateY(6px)}}.portal-panel h2{margin:0 0 16px}.portal-panel h3{margin:24px 0 12px;color:var(--teal);font-size:1rem}
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.summary-grid div,.club-grid div,.summary-callout{padding:14px;border-radius:15px;background:rgba(255,255,255,.055)}.summary-grid span,.club-grid span,.summary-callout span{display:block;color:var(--teal);font-size:.62rem;font-weight:900;letter-spacing:.09em;text-transform:uppercase}.summary-grid strong,.club-grid strong,.summary-callout strong{display:block;margin-top:5px}.club-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.timeline{display:grid;gap:10px}.timeline article{display:grid;grid-template-columns:1fr auto;gap:4px 14px;padding:14px;border-radius:15px;background:rgba(255,255,255,.055)}.timeline article strong{min-width:0}.timeline article span,.timeline article em{color:rgba(255,255,255,.6);font-size:.8rem;font-style:normal}.timeline article p{grid-column:1/-1;margin:5px 0 0;color:rgba(255,255,255,.72);line-height:1.45}.empty-state{margin:0;padding:20px;color:rgba(255,255,255,.58);text-align:center}.portal-action{display:flex;justify-content:center;margin-top:12px;padding:14px;border-radius:14px;text-decoration:none;font-weight:900}.portal-action.danger{color:#fff;background:#8c2431}
+@media(max-width:660px){.summary-grid{grid-template-columns:1fr 1fr}.club-grid{grid-template-columns:1fr}.portal-panel{padding:16px}.portal-tabs button{font-size:.7rem}.qr-wrap{grid-template-columns:minmax(190px,58%) 1fr}.qr-image{width:100%}}
+@media(max-width:390px){.portal-tabs{gap:3px;padding:4px}.portal-tabs button{padding:10px 2px;font-size:.63rem}.summary-grid{grid-template-columns:1fr 1fr}.qr-wrap{grid-template-columns:1fr}.qr-image{grid-row:auto;width:100%}.qr-wrap strong,.qr-wrap span{text-align:center}}
