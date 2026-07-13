@@ -30,7 +30,7 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'Derby Hurricanes Wallet Service',
-    version: '5.2.0',
+    version: '5.2.1',
     appleConfigured: false,
     googleConfigured,
     iphoneHomeScreen: true,
@@ -91,7 +91,7 @@ async function loadMember(token) {
 function createGoogleSaveUrl(member) {
   const localId = cleanId(member.localMemberID || 'member');
   const season = cleanId(member.membershipSeason || 'season');
-  const objectId = `${googleIssuerId}.${localId}-${season}`;
+  const objectId = `${googleIssuerId}.${localId}-${season}-v52`;
   const classId = googleClassId.includes('.') ? googleClassId : `${googleIssuerId}.${googleClassId}`;
   const expiry = parseUkDate(member.expiryDate);
   const status = String(member.membershipStatus || 'Unknown');
