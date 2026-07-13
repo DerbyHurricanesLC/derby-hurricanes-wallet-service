@@ -2,12 +2,16 @@
   "name": "Derby Hurricanes Membership Card",
   "short_name": "DH Card",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#071827",
-  "theme_color": "#004957",
-  "description": "Derby Hurricanes digital membership card",
+  "background_color": "#031017",
+  "theme_color": "#003f49",
   "icons": [
-    {"src": "/club-logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "/club-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {
+      "src": "/wallet-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
