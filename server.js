@@ -202,9 +202,6 @@ app.post('/wallet/sync', async (req, res) => {
     return res.json({
       ok: true,
       objectId: walletObject.id,
-      season: member.membershipSeason,
-      status: member.membershipStatus,
-      expiryDate: member.expiryDate,
     });
   } catch (error) {
     return res.status(400).json({
@@ -240,53 +237,10 @@ async function loadMember(token) {
   return data.member;
 }
 
-function normaliseMembership(member) {
-  const expiry = parseUkDate(member.expiryDate);
-  const now = new Date();
-  const normalised = { ...member };
-
-  if (expiry) {
-    normalised.membershipSeason = seasonFromExpiry(expiry);
-    normalised.expiryDate = formatUkDate(expiry);
-
-    const expiryEnd = new Date(expiry);
-    expiryEnd.setUTCHours(23, 59, 59, 999);
-
-    if (now.getTime() > expiryEnd.getTime()) {
-      normalised.membershipStatus = 'Expired';
-    } else {
-      const daysLeft = Math.ceil((expiryEnd.getTime() - now.getTime()) / 86400000);
-      normalised.membershipStatus = daysLeft <= 30 ? 'Due Soon' : 'Active';
-    }
-  } else {
-    normalised.membershipSeason = String(
-      member.membershipSeason || currentMembershipSeason(now),
-    );
-    normalised.membershipStatus = String(member.membershipStatus || 'Unknown');
-  }
-
-  return normalised;
-}
-
-function currentMembershipSeason(date) {
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
-  const startYear = month >= 10 ? year : year - 1;
-  return `${startYear}/${String((startYear + 1) % 100).padStart(2, '0')}`;
-}
-
-function seasonFromExpiry(expiry) {
-  const endYear = expiry.getUTCFullYear();
-  return `${endYear - 1}/${String(endYear % 100).padStart(2, '0')}`;
-}
-
 function buildGoogleObject(member, token) {
   const localMemberId = String(member.localMemberID || 'member');
-  const membershipSeason = String(member.membershipSeason || 'season');
   const membershipType = String(member.membershipType || 'Membership');
   const memberName = String(member.name || 'Member');
-  const status = String(member.membershipStatus || 'Unknown');
-  const expiryText = String(member.expiryDate || 'Not set');
   const qrValue = String(member.qrData || member.localMemberID || '');
 
   const localId = cleanId(localMemberId);
@@ -294,7 +248,6 @@ function buildGoogleObject(member, token) {
   const classId = googleClassId.includes('.')
     ? googleClassId
     : `${googleIssuerId}.${googleClassId}`;
-  const expiry = parseUkDate(member.expiryDate);
   const fullCardUrl = `${publicBaseUrl}/card/${encodeURIComponent(token)}`;
 
   const genericObject = {
@@ -310,10 +263,10 @@ function buildGoogleObject(member, token) {
     subheader: {
       defaultValue: {
         language: 'en-GB',
-        value: `${membershipType} · ${membershipSeason}`,
+        value: membershipType,
       },
     },
-    hexBackgroundColor: statusColour(status),
+    hexBackgroundColor: '#001f29',
     logo: {
       sourceUri: { uri: `${publicBaseUrl}/wallet-logo.png?v=80` },
       contentDescription: {
@@ -338,11 +291,8 @@ function buildGoogleObject(member, token) {
       alternateText: localMemberId,
     },
     textModulesData: [
-      { id: 'membership_status', header: 'STATUS', body: status.toUpperCase() },
       { id: 'member_id', header: 'MEMBER ID', body: localMemberId },
       { id: 'membership_type', header: 'MEMBERSHIP TYPE', body: membershipType },
-      { id: 'membership_season', header: 'SEASON', body: membershipSeason },
-      { id: 'valid_until', header: 'VALID UNTIL', body: expiryText },
       { id: 'training', header: 'TRAINING', body: 'Thursdays, 18:30' },
       { id: 'venue', header: 'VENUE', body: 'Sturgess Field, Kedleston Road, Derby' },
       { id: 'contact', header: 'CLUB EMAIL', body: 'derbyhurricanes@gmail.com' },
@@ -367,10 +317,6 @@ function buildGoogleObject(member, token) {
       ],
     },
   };
-
-  if (expiry) {
-    genericObject.validTimeInterval = { end: { date: expiry.toISOString() } };
-  }
 
   return genericObject;
 }
@@ -465,13 +411,6 @@ function createGoogleSaveUrl(walletObject) {
   return `https://pay.google.com/gp/v/save/${signedJwt}`;
 }
 
-function statusColour(status) {
-  const value = String(status || '').toLowerCase();
-  if (value.includes('expired')) return '#5d1820';
-  if (value.includes('due')) return '#5a4100';
-  return '#003f49';
-}
-
 function parseUkDate(value) {
   const match = String(value || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) return null;
@@ -512,13 +451,9 @@ function escapeHtml(value) {
 }
 
 function renderWallet(member, token, qrImage) {
-  const status = escapeHtml(member.membershipStatus || 'Unknown');
-  const statusClass = status.toLowerCase().replaceAll(' ', '-');
   const memberName = escapeHtml(member.name || 'Member');
   const localMemberId = escapeHtml(member.localMemberID || '');
   const membershipType = escapeHtml(member.membershipType || 'Membership');
-  const membershipSeason = escapeHtml(member.membershipSeason || '');
-  const expiryDate = escapeHtml(member.expiryDate || 'Not set');
 
   const googleButton = googleConfigured
     ? `<a class="wallet-button google" href="/google/${encodeURIComponent(token)}"><span class="google-mark">G</span><span>Add to Google Wallet</span></a>`
@@ -540,17 +475,13 @@ function renderWallet(member, token, qrImage) {
 </head>
 <body>
   <main class="page">
-    <section class="member-card ${statusClass}">
+    <section class="member-card">
       <div class="card-watermark" aria-hidden="true"></div>
       <div class="card-sheen" aria-hidden="true"></div>
 
       <header class="card-header">
         <div class="logo-panel">
           <img class="club-logo" src="/club-logo-full.png?v=80" alt="Derby Hurricanes Lacrosse Club">
-        </div>
-        <div class="season-block">
-          <span>MEMBERSHIP</span>
-          <strong>${membershipSeason}</strong>
         </div>
       </header>
 
@@ -562,7 +493,6 @@ function renderWallet(member, token, qrImage) {
           <h1>${memberName}</h1>
           <div class="identity-meta">
             <div><span>MEMBER ID</span><strong>${localMemberId}</strong></div>
-            <div><span>VALID UNTIL</span><strong>${expiryDate}</strong></div>
           </div>
         </div>
 
@@ -573,9 +503,6 @@ function renderWallet(member, token, qrImage) {
         </div>
       </div>
 
-      <footer class="card-footer">
-        <div class="status-badge ${statusClass}"><i></i>${status}</div>
-      </footer>
     </section>
 
     <section class="details-card">
@@ -583,8 +510,6 @@ function renderWallet(member, token, qrImage) {
       <div class="details-grid">
         <div><span>Member</span><strong>${memberName}</strong></div>
         <div><span>Membership</span><strong>${membershipType}</strong></div>
-        <div><span>Season</span><strong>${membershipSeason}</strong></div>
-        <div><span>Status</span><strong>${status}</strong></div>
         <div><span>Training</span><strong>Thursdays, 18:30</strong></div>
         <div><span>Venue</span><strong>Sturgess Field</strong></div>
       </div>
@@ -596,7 +521,7 @@ function renderWallet(member, token, qrImage) {
       <button class="wallet-button secondary" onclick="shareCard()">Share membership card</button>
       <button class="wallet-button secondary" onclick="syncWallet()">Refresh wallet pass</button>
       <button class="wallet-button secondary" onclick="window.print()">Print or save as PDF</button>
-      <p id="sync-message">Membership season, expiry and status are recalculated automatically from the club record.</p>
+      <p id="sync-message">Refresh your wallet pass to get the latest membership details.</p>
     </section>
   </main>
 
@@ -650,7 +575,7 @@ function renderWallet(member, token, qrImage) {
         });
         const data = await response.json();
         if (!response.ok || !data.ok) throw new Error(data.error || 'Refresh failed.');
-        message.textContent = 'Wallet pass refreshed: ' + data.season + ', ' + data.status + ', valid until ' + data.expiryDate + '.';
+        message.textContent = 'Wallet pass refreshed successfully.';
       } catch (error) {
         message.textContent = error.message || 'Wallet refresh failed.';
       }
